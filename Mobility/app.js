@@ -56,6 +56,7 @@ app.get("/users", async (req, res) => {
 
 app.post("/register", async (req, res) => {
   console.log("Registering user");
+  console.log("test");
   const { name, password } = req.body;
   let conn;
   try {
