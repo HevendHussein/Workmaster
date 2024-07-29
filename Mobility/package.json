@@ -1,4 +1,10 @@
 {
+  "name": "workmaster-server",
+  "version": "1.0.0",
+  "main": "app.js",
+  "scripts": {
+    "start": "nodemon app.js"
+  },
   "dependencies": {
     "@react-navigation/native": "^6.1.17",
     "@react-navigation/stack": "^6.3.29",
@@ -16,13 +22,8 @@
     "react-native-gesture-handler": "^2.16.1",
     "react-native-reanimated": "^3.9.0",
     "react-native-vector-icons": "^10.1.0",
-    "react-navigation": "^5.0.0"
-  },
-  "name": "y",
-  "version": "1.0.0",
-  "main": "app.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "react-navigation": "^5.0.0",
+    "nodemon": "^2.0.22"
   },
   "author": "Hevend",
   "license": "ISC",

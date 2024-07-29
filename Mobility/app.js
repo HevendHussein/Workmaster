@@ -11,15 +11,27 @@ app.use(cookieParser());
 const jwt = require("jsonwebtoken");
 const dotenv = require("dotenv").config();
 
+// const pool = mariadb.createPool({
+//   host: "192.168.178.24",
+//   user: "root",
+//   password: "Hevi2001!",
+//   database: "user",
+//   connectionLimit: 5,
+// });
 const pool = mariadb.createPool({
-  host: "192.168.178.24",
-  user: "root",
-  password: "Hevi2001!",
-  database: "user",
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  database: process.env.DB_NAME,
+  port: process.env.DB_PORT,
   connectionLimit: 5,
 });
 
 let conn;
+
+app.get("/", (req, res) => {
+  res.send("Server is running");
+});
 
 app.get("/users", async (req, res) => {
   console.log("Hier");
