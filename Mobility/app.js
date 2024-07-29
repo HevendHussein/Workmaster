@@ -12,107 +12,104 @@ const jwt = require("jsonwebtoken");
 const dotenv = require("dotenv").config();
 
 const pool = mariadb.createPool({
-  host: "192.168.43.167",
+  host: "192.168.178.24",
   user: "root",
   password: "Hevi2001!",
-  database: "nodedb",
+  database: "user",
   connectionLimit: 5,
 });
 
 let conn;
 
-app.post("/register", (req, res) => {
-  res.clearCookie("test");
-  const { name, password } = req.body;
-  pool
-    .getConnection()
-    .then((connection) => {
-      conn = connection;
-      return conn.query(
-        `
-              SELECT * FROM customers WHERE password = ?
-            `,
-        [password]
-      );
-    })
-    .then((rows) => {
-      if (rows.length > 0) {
-        // Wenn das Passwort bereits existiert, senden Sie eine entsprechende Antwort
-        res.json({ passwordExists: true });
-      } else {
-        res.cookie("token", process.env.TOKEN_SECRET);
-
-        console.log("1", res.cookie);
-
-        // Wenn das Passwort nicht existiert, fügen Sie den neuen Benutzer ein
-        return conn
-          .query(
-            `
-                INSERT INTO customers (name, password)
-                VALUES (?, ?)
-              `,
-            [name, password]
-          )
-          .then(() => {
-            res.send("Erfolgreich eingefügt!");
-          });
-      }
-    })
-    .then(() => {
-      if (conn) conn.end();
-    })
-    .catch((err) => {
-      console.log(err);
-      if (conn) conn.end();
-    });
-});
-
-function authenticateToken(req, res) {
-  // res.status(403);
-  // console.log("req.cookies", req.cookies);
-  // console.log("2", process.env.TOKEN_SECRET);
-  if (req.cookies["token"] == null) {
-    res.status(403);
+app.get("/users", async (req, res) => {
+  console.log("Hier");
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const rows = await conn.query("SELECT * FROM user");
+    res.json(rows);
+  } catch (err) {
+    console.error("Database error:", err);
+    res.status(500).send("Server error: " + err.message);
+  } finally {
+    if (conn) conn.release();
   }
-  if (req.cookies["token"] != process.env.TOKEN_SECRET) res.status(403);
-}
-
-app.post("/login", (req, res) => {
-  authenticateToken(req, res);
-  const { name, password } = req.body;
-  // Überprüfen Sie den Namen und das Passwort in der Datenbank
-  pool
-    .getConnection()
-    .then((connection) => {
-      return connection
-        .query(
-          `
-              SELECT * FROM customers WHERE name = ? AND password = ?
-            `,
-          [name, password]
-        )
-        .then((rows) => {
-          connection.release(); // Geben Sie die Verbindung zurück an den Pool
-          if (rows.length > 0) {
-            const user = rows[0];
-            //console.log(user.id); // Geben Sie die ID des Benutzers aus
-            res.json({ success: true, id: user.id });
-          } else {
-            // Wenn die Anmeldedaten nicht korrekt sind, senden Sie eine negative Antwort
-            res.json({ success: false });
-          }
-        });
-    })
-    .catch((err) => {
-      console.log(err);
-      res.json({ success: false }); // Senden Sie eine negative Antwort, wenn ein Fehler auftritt
-    });
 });
+
+app.post("/register", async (req, res) => {
+  console.log("Registering user");
+  const { name, password } = req.body;
+  let conn;
+  try {
+    conn = await pool.getConnection();
+
+    // Überprüfen, ob das Passwort bereits existiert
+    const rows = await conn.query("SELECT * FROM user WHERE password = ?", [
+      password,
+    ]);
+    if (rows.length > 0) {
+      res.json({ passwordExists: true });
+    } else {
+      // Benutzer hinzufügen, wenn das Passwort nicht existiert
+      await conn.query("INSERT INTO user (name, password) VALUES (?, ?)", [
+        name,
+        password,
+      ]);
+      res.status(200).send("User added successfully");
+    }
+  } catch (err) {
+    console.error("Database error:", err);
+    res.status(500).send("Server error: " + err.message);
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+app.post("/addUser", async (req, res) => {
+  console.log("Adding user");
+  const { name } = req.body;
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    await conn.query("INSERT INTO user (name) VALUES (?)", [name]);
+    res.status(200).send("User added successfully");
+  } catch (err) {
+    console.error("Database error:", err);
+    res.status(500).send("Server error: " + err.message);
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+app.post("/login", async (req, res) => {
+  console.log("login");
+  const { name, password } = req.body;
+  let conn;
+  try {
+    conn = await pool.getConnection();
+    const rows = await conn.query(
+      "SELECT * FROM user WHERE name = ? AND password = ?",
+      [name, password]
+    );
+    if (rows.length > 0) {
+      const user = rows[0];
+      res.json({ success: true, id: user.id });
+    } else {
+      res.json({ success: false });
+    }
+  } catch (err) {
+    console.error("Database error:", err);
+    res.status(500).send("Server error: " + err.message);
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+// let conn;
 
 app.get("/user/:id", (req, res) => {
-  authenticateToken(req, res);
-
   const { id } = req.params;
+  let conn;
 
   pool
     .getConnection()
@@ -120,7 +117,7 @@ app.get("/user/:id", (req, res) => {
       return connection
         .query(
           `
-              SELECT * FROM customers WHERE id = ?
+              SELECT * FROM user WHERE id = ?
             `,
           [id]
         )
@@ -141,8 +138,8 @@ app.get("/user/:id", (req, res) => {
 });
 
 app.post("/updateSteps", (req, res) => {
-  authenticateToken(req, res);
   const { steps, id } = req.body;
+
   let connection;
 
   pool
@@ -151,7 +148,7 @@ app.post("/updateSteps", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        UPDATE customers SET steps = COALESCE(steps, 0) + ? WHERE id = ?
+        UPDATE user SET steps = COALESCE(steps, 0) + ? WHERE id = ?
       `,
         [steps, id]
       ); // Setzen Sie steps auf 0, wenn es NULL ist, bevor Sie die neuen Schritte hinzufügen
@@ -167,7 +164,6 @@ app.post("/updateSteps", (req, res) => {
 });
 
 app.post("/updateStepsAfterMaps", (req, res) => {
-  authenticateToken(req, res);
   const { steps, id } = req.body;
   let connection;
   console.log("steps", steps);
@@ -178,7 +174,7 @@ app.post("/updateStepsAfterMaps", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        UPDATE customers SET steps = ? WHERE id = ?
+        UPDATE user SET steps = ? WHERE id = ?
       `,
         [steps, id]
       ); // Setzen Sie steps auf den neuen Wert
@@ -194,7 +190,6 @@ app.post("/updateStepsAfterMaps", (req, res) => {
 });
 
 app.post("/updateDmgPoints", (req, res) => {
-  authenticateToken(req, res);
   const { dmgPoints, id } = req.body;
   let connection;
   console.log("Backend dmgPoints", dmgPoints);
@@ -205,7 +200,7 @@ app.post("/updateDmgPoints", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        UPDATE customers SET dmgPoints = ? WHERE id = ?
+        UPDATE user SET dmgPoints = ? WHERE id = ?
       `,
         [dmgPoints, id]
       );
@@ -225,7 +220,6 @@ app.post("/updateDmgPoints", (req, res) => {
 });
 
 app.post("/updateStepsLastDay", (req, res) => {
-  authenticateToken(req, res);
   const { steps, id } = req.body;
   let connection;
 
@@ -235,7 +229,7 @@ app.post("/updateStepsLastDay", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        UPDATE customers SET stepsLastDay = COALESCE(stepsLastDay, 0) + ? WHERE id = ?
+        UPDATE user SET stepsLastDay = COALESCE(stepsLastDay, 0) + ? WHERE id = ?
       `,
         [steps, id]
       ); // Setzen Sie stepsLastDay auf 0, wenn es NULL ist, bevor Sie die neuen Schritte hinzufügen
@@ -251,7 +245,6 @@ app.post("/updateStepsLastDay", (req, res) => {
 });
 
 app.get("/getUserLevel", (req, res) => {
-  authenticateToken(req, res);
   const { id } = req.query;
   let connection;
 
@@ -261,7 +254,7 @@ app.get("/getUserLevel", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        SELECT COALESCE(level, 1) as level FROM customers WHERE id = ?
+        SELECT COALESCE(level, 1) as level FROM user WHERE id = ?
       `,
         [id]
       ); // Setzen Sie level auf 1, wenn es NULL ist
@@ -281,7 +274,6 @@ app.get("/getUserLevel", (req, res) => {
 });
 
 app.get("/getUserSteps", (req, res) => {
-  authenticateToken(req, res);
   console.log(1, "Endpunkt getUserSteps");
   const { id } = req.query;
   let connection;
@@ -292,7 +284,7 @@ app.get("/getUserSteps", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        SELECT COALESCE(steps, 0) as steps FROM customers WHERE id = ?
+        SELECT COALESCE(steps, 0) as steps FROM user WHERE id = ?
       `,
         [id]
       ); // Setzen Sie steps auf 0, wenn es NULL ist
@@ -312,7 +304,6 @@ app.get("/getUserSteps", (req, res) => {
 });
 
 app.get("/getUserDmgPoints", (req, res) => {
-  authenticateToken(req, res);
   const { id } = req.query;
   let connection;
 
@@ -322,7 +313,7 @@ app.get("/getUserDmgPoints", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        SELECT COALESCE(dmgPoints, 0) as dmgPoints FROM customers WHERE id = ?
+        SELECT COALESCE(dmgPoints, 0) as dmgPoints FROM user WHERE id = ?
       `,
         [id]
       ); // Setzen Sie dmgPoints auf 0, wenn es NULL ist
@@ -342,10 +333,9 @@ app.get("/getUserDmgPoints", (req, res) => {
 });
 
 app.get("/everynameandstepsandlevel", async (req, res) => {
-  authenticateToken(req, res);
   try {
     const result = await pool.query(
-      "SELECT name, COALESCE(steps, 0) as steps, COALESCE(level, 1) as level FROM customers"
+      "SELECT name, COALESCE(steps, 0) as steps, COALESCE(level, 1) as level FROM user"
     );
     //console.log(result.rows); // Log only the data
     res.json(result);
@@ -356,10 +346,9 @@ app.get("/everynameandstepsandlevel", async (req, res) => {
 });
 
 app.get("/everynameandstepsandlevelandidandpoisened", async (req, res) => {
-  authenticateToken(req, res);
   try {
     const result = await pool.query(
-      "SELECT id, name, COALESCE(steps, 0) as steps, COALESCE(level, 1) as level, poisened FROM customers"
+      "SELECT id, name, COALESCE(steps, 0) as steps, COALESCE(level, 1) as level, poisened FROM user"
     );
     //console.log(result.rows); // Log only the data
     res.json(result);
@@ -370,7 +359,6 @@ app.get("/everynameandstepsandlevelandidandpoisened", async (req, res) => {
 });
 
 app.post("/updateLevel", (req, res) => {
-  authenticateToken(req, res);
   const { level, id } = req.body;
   let connection;
 
@@ -380,7 +368,7 @@ app.post("/updateLevel", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        UPDATE customers SET level = ? WHERE id = ?
+        UPDATE user SET level = ? WHERE id = ?
       `,
         [level, id]
       );
@@ -408,16 +396,16 @@ setInterval(() => {
       return connection
         .query(
           `
-        UPDATE customers 
-        SET dmgPoints = CEIL(stepsLastDay * 0.25) + level * 100, 
-            stepsLastDay = 0, 
-            lastClick = 0, 
-            singed = 1000, 
-            steps = CASE 
-                      WHEN poisened = 1 THEN GREATEST(steps - 3000, 0) 
-                      ELSE steps 
-                    END, 
-            poisened = 0, 
+        UPDATE user
+        SET dmgPoints = CEIL(stepsLastDay * 0.25) + level * 100,
+            stepsLastDay = 0,
+            lastClick = 0,
+            singed = 1000,
+            steps = CASE
+                      WHEN poisened = 1 THEN GREATEST(steps - 3000, 0)
+                      ELSE steps
+                    END,
+            poisened = 0,
             potionClick = 0
         `
         )
@@ -434,7 +422,6 @@ setInterval(() => {
 }, 60000); // Überprüfen Sie jede Minute
 
 app.get("/getDmgPoints", (req, res) => {
-  authenticateToken(req, res);
   const { id } = req.query;
   let connection;
 
@@ -444,7 +431,7 @@ app.get("/getDmgPoints", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        SELECT dmgPoints FROM customers WHERE id = ?
+        SELECT dmgPoints FROM user WHERE id = ?
       `,
         [id]
       );
@@ -460,7 +447,6 @@ app.get("/getDmgPoints", (req, res) => {
 });
 
 app.get("/getNumberOfDebuff", (req, res) => {
-  authenticateToken(req, res);
   const { id } = req.query;
   let connection;
 
@@ -470,7 +456,7 @@ app.get("/getNumberOfDebuff", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        SELECT COALESCE(numberOfDebuff, 0) as numberOfDebuff FROM customers WHERE id = ?
+        SELECT COALESCE(numberOfDebuff, 0) as numberOfDebuff FROM user WHERE id = ?
       `,
         [id]
       );
@@ -486,7 +472,6 @@ app.get("/getNumberOfDebuff", (req, res) => {
 });
 
 app.post("/attackUser", (req, res) => {
-  authenticateToken(req, res);
   const { user2, dmgPoints, userId } = req.body;
   let connection;
 
@@ -496,7 +481,7 @@ app.post("/attackUser", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        UPDATE customers SET steps = CASE WHEN steps - ? < 0 THEN 0 ELSE steps - ? END WHERE id = ?
+        UPDATE user SET steps = CASE WHEN steps - ? < 0 THEN 0 ELSE steps - ? END WHERE id = ?
       `,
         [dmgPoints, dmgPoints, user2]
       );
@@ -504,7 +489,7 @@ app.post("/attackUser", (req, res) => {
     .then((result) => {
       return connection.query(
         `
-        UPDATE customers SET dmgPoints = 0 WHERE id = ?
+        UPDATE user SET dmgPoints = 0 WHERE id = ?
       `,
         [userId]
       );
@@ -520,7 +505,6 @@ app.post("/attackUser", (req, res) => {
 });
 
 app.get("/getLastClick", (req, res) => {
-  authenticateToken(req, res);
   const { id } = req.query;
   let connection;
   pool
@@ -529,7 +513,7 @@ app.get("/getLastClick", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        SELECT lastClick FROM customers WHERE id = ?
+        SELECT lastClick FROM user WHERE id = ?
       `,
         [id]
       );
@@ -553,7 +537,6 @@ app.get("/getLastClick", (req, res) => {
 });
 
 app.post("/updateLastClick", (req, res) => {
-  authenticateToken(req, res);
   const { lastClick, id } = req.body;
   let connection;
 
@@ -563,7 +546,7 @@ app.post("/updateLastClick", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        UPDATE customers SET lastClick = ? WHERE id = ?
+        UPDATE user SET lastClick = ? WHERE id = ?
       `,
         [lastClick, id]
       );
@@ -579,7 +562,6 @@ app.post("/updateLastClick", (req, res) => {
 });
 
 app.get("/getLastPotionClick", (req, res) => {
-  authenticateToken(req, res);
   const { id } = req.query;
   let connection;
   pool
@@ -588,7 +570,7 @@ app.get("/getLastPotionClick", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        SELECT potionClick FROM customers WHERE id = ?
+        SELECT potionClick FROM user WHERE id = ?
       `,
         [id]
       );
@@ -612,7 +594,6 @@ app.get("/getLastPotionClick", (req, res) => {
 });
 
 app.post("/updateLastPotionClick", (req, res) => {
-  authenticateToken(req, res);
   const { id, potionClick } = req.body;
   let connection;
 
@@ -622,7 +603,7 @@ app.post("/updateLastPotionClick", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        UPDATE customers SET potionClick = ? WHERE id = ?
+        UPDATE user SET potionClick = ? WHERE id = ?
       `,
         [potionClick, id]
       );
@@ -638,7 +619,6 @@ app.post("/updateLastPotionClick", (req, res) => {
 });
 
 app.post("/updateStepAfterBuff", (req, res) => {
-  authenticateToken(req, res);
   const { id } = req.body;
   let connection;
 
@@ -648,7 +628,7 @@ app.post("/updateStepAfterBuff", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        UPDATE customers SET steps = steps + 3000 WHERE id = ?
+        UPDATE user SET steps = steps + 3000 WHERE id = ?
       `,
         [id]
       ); // Setzen Sie steps auf 0, wenn es NULL ist, bevor Sie die neuen Schritte hinzufügen
@@ -664,7 +644,6 @@ app.post("/updateStepAfterBuff", (req, res) => {
 });
 
 app.post("/updatePoisendAfterHeal", (req, res) => {
-  authenticateToken(req, res);
   const { id } = req.body;
   let connection;
   pool
@@ -673,7 +652,7 @@ app.post("/updatePoisendAfterHeal", (req, res) => {
       connection = conn;
       return connection.query(
         `
-      UPDATE customers SET poisened = 0, singed = 1000 WHERE id = ?
+      UPDATE user SET poisened = 0, singed = 1000 WHERE id = ?
     `,
         [id]
       );
@@ -689,7 +668,6 @@ app.post("/updatePoisendAfterHeal", (req, res) => {
 });
 
 app.post("/updateNumberOfDebuff", (req, res) => {
-  authenticateToken(req, res);
   const { id } = req.body;
   let connection;
 
@@ -699,7 +677,7 @@ app.post("/updateNumberOfDebuff", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        UPDATE customers SET numberOfDebuff = COALESCE(numberOfDebuff, 0) + 1 WHERE id = ?
+        UPDATE user SET numberOfDebuff = COALESCE(numberOfDebuff, 0) + 1 WHERE id = ?
       `,
         [id]
       ); // Setzen Sie numberOfDebuff auf 0, wenn es NULL ist, bevor Sie 1 hinzufügen
@@ -715,20 +693,17 @@ app.post("/updateNumberOfDebuff", (req, res) => {
 });
 
 app.get("/addresses", (req, res) => {
-  authenticateToken(req, res);
   pool
     .getConnection()
     .then((connection) => {
-      return connection
-        .query("SELECT id, adr, place FROM adressen")
-        .then((rows) => {
-          connection.release();
-          if (rows.length > 0) {
-            res.json({ success: true, addresses: rows }); // send all rows
-          } else {
-            res.json({ success: false });
-          }
-        });
+      return connection.query("SELECT id, adr FROM adressen").then((rows) => {
+        connection.release();
+        if (rows.length > 0) {
+          res.json({ success: true, addresses: rows }); // send all rows
+        } else {
+          res.json({ success: false });
+        }
+      });
     })
     .catch((err) => {
       console.log(err);
@@ -737,7 +712,6 @@ app.get("/addresses", (req, res) => {
 });
 
 app.post("/updateAddress", (req, res) => {
-  authenticateToken(req, res);
   const { adr, id } = req.body;
   let connection;
   // console.log("adr", adr);
@@ -765,7 +739,6 @@ app.post("/updateAddress", (req, res) => {
 });
 
 app.post("/reduceNumberOfDebuff", (req, res) => {
-  authenticateToken(req, res);
   const { userId } = req.body;
   let connection;
   // console.log("userId", userId);
@@ -776,7 +749,7 @@ app.post("/reduceNumberOfDebuff", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        UPDATE customers SET numberOfDebuff = numberOfDebuff - 1 WHERE id = ?
+        UPDATE user SET numberOfDebuff = numberOfDebuff - 1 WHERE id = ?
       `,
         [userId]
       );
@@ -796,7 +769,6 @@ app.post("/reduceNumberOfDebuff", (req, res) => {
 });
 
 app.post("/raisePoisened", (req, res) => {
-  authenticateToken(req, res);
   const { userId } = req.body;
   let connection;
 
@@ -806,7 +778,7 @@ app.post("/raisePoisened", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        UPDATE customers SET poisened = 1 WHERE id = ?
+        UPDATE user SET poisened = 1 WHERE id = ?
       `,
         [userId]
       );
@@ -826,7 +798,6 @@ app.post("/raisePoisened", (req, res) => {
 });
 
 app.get("/getPoisened", (req, res) => {
-  authenticateToken(req, res);
   const { userId } = req.query;
   // console.log(userId);
   let connection;
@@ -836,7 +807,7 @@ app.get("/getPoisened", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        SELECT poisened FROM customers WHERE id = ?
+        SELECT poisened FROM user WHERE id = ?
       `,
         [userId]
       );
@@ -858,7 +829,6 @@ app.get("/getPoisened", (req, res) => {
 });
 
 app.post("/setSinged", (req, res) => {
-  authenticateToken(req, res);
   const { user2, userId } = req.body;
   // console.log("user2", user2);
   // console.log("userId", userId);
@@ -870,7 +840,7 @@ app.post("/setSinged", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        UPDATE customers SET singed = ? WHERE id = ?
+        UPDATE user SET singed = ? WHERE id = ?
       `,
         [userId, user2]
       );
@@ -890,7 +860,6 @@ app.post("/setSinged", (req, res) => {
 });
 
 app.get("/getSinged", (req, res) => {
-  authenticateToken(req, res);
   const { id } = req.query;
 
   let connection;
@@ -900,7 +869,7 @@ app.get("/getSinged", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        SELECT singed FROM customers WHERE id = ?
+        SELECT singed FROM user WHERE id = ?
       `,
         [id]
       );
@@ -913,7 +882,7 @@ app.get("/getSinged", (req, res) => {
         } else {
           return connection.query(
             `
-            SELECT name FROM customers WHERE id = ?
+            SELECT name FROM user WHERE id = ?
           `,
             [singedId]
           );
@@ -936,7 +905,6 @@ app.get("/getSinged", (req, res) => {
 });
 
 app.post("/updateStepAfterPotion", (req, res) => {
-  authenticateToken(req, res);
   const { id } = req.body;
   let connection;
 
@@ -946,7 +914,7 @@ app.post("/updateStepAfterPotion", (req, res) => {
       connection = conn;
       return connection.query(
         `
-        UPDATE customers SET steps = COALESCE(steps, 0) + 750 WHERE id = ?
+        UPDATE user SET steps = COALESCE(steps, 0) + 750 WHERE id = ?
       `,
         [id]
       ); // Setzen Sie steps auf 0, wenn es NULL ist, bevor Sie die neuen Schritte hinzufügen

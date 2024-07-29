@@ -1,5 +1,5 @@
 module.exports = {
-  ipAddress: "http://192.168.43.167:3000",
+  ipAddress: "http://192.168.178.24:3000",
 };
 
 // module.exports = {

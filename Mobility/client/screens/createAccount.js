@@ -21,21 +21,42 @@ export default function CreateAccount({ navigation }) {
       return;
     }
 
-    console.log(config.ipAddress, 1);
-    // console.log(request.cookies);
+    console.log(`IP Address: ${config.ipAddress}, Status: 1`);
     axios
-      .post(`${config.ipAddress}/register`, { name, password })
+      .post(
+        `${config.ipAddress}/register`,
+        { name, password },
+        { timeout: 5000 }
+      )
       .then((response) => {
         if (response.data.passwordExists) {
           alert(
             "Das Passwort existiert bereits. Bitte wählen Sie ein anderes Passwort."
           );
         } else {
-          navigation.navigate("LoginScreen");
+          console.log("User registered successfully");
+          navigation.navigate("LoginScreen"); // Navigiere zur Login-Seite nach erfolgreicher Registrierung
         }
       })
       .catch((error) => {
-        console.log(error);
+        if (error.response) {
+          // Server hat mit einem anderen Status als 2xx geantwortet
+          console.error(
+            "Server responded with an error:",
+            error.response.status
+          );
+          console.error("Response data:", error.response.data);
+        } else if (error.request) {
+          // Anfrage wurde gemacht, aber keine Antwort erhalten
+          console.error("No response received:", error.request);
+        } else {
+          // Ein anderes Problem trat während des Anforderungsaufbaus auf
+          console.error("Error setting up request:", error.message);
+        }
+        console.error("Error stack trace:", error.stack);
+        console.error("Request URL:", `${config.ipAddress}/register`);
+        console.error("Request data:", { name, password });
+        console.error("Full error object:", error);
       });
   };
 
