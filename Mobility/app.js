@@ -358,6 +358,7 @@ app.get("/getUserDmgPoints", (req, res) => {
 // });
 
 app.get("/everynameandstepsandlevel", async (req, res) => {
+  console.log("Server Hello!");
   try {
     const result = await pool.query(
       "SELECT name, COALESCE(steps, 0) as steps, COALESCE(level, 1) as level FROM user"
@@ -365,11 +366,13 @@ app.get("/everynameandstepsandlevel", async (req, res) => {
 
     // BigInt-Werte in Strings umwandeln
     const processedResult = result.map((row) => {
-      return {
-        ...row,
-        steps: row.steps ? row.steps.toString() : "0",
-        level: row.level ? row.level.toString() : "1",
-      };
+      let newRow = { ...row };
+      for (let key in newRow) {
+        if (typeof newRow[key] === "bigint") {
+          newRow[key] = newRow[key].toString();
+        }
+      }
+      return newRow;
     });
 
     res.json(processedResult);
