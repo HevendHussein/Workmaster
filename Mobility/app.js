@@ -45,7 +45,7 @@ app.get("/users", async (req, res) => {
   try {
     conn = await pool.getConnection();
     const rows = await conn.query("SELECT * FROM user");
-    res.json(rows);
+    res.json(JSON.parse(stringifyBigInt(rows)));
   } catch (err) {
     console.error("Database error:", err);
     res.status(500).send("Server error: " + err.message);
@@ -66,7 +66,8 @@ app.post("/register", async (req, res) => {
       password,
     ]);
     if (rows.length > 0) {
-      res.json({ passwordExists: true });
+      res.setHeader("Content-Type", "application/json");
+      res.send(stringifyBigInt({ passwordExists: true }));
     } else {
       // Benutzer hinzufügen, wenn das Passwort nicht existiert
       await conn.query("INSERT INTO user (name, password) VALUES (?, ?)", [
@@ -83,21 +84,21 @@ app.post("/register", async (req, res) => {
   }
 });
 
-app.post("/addUser", async (req, res) => {
-  console.log("Adding user");
-  const { name } = req.body;
-  let conn;
-  try {
-    conn = await pool.getConnection();
-    await conn.query("INSERT INTO user (name) VALUES (?)", [name]);
-    res.status(200).send("User added successfully");
-  } catch (err) {
-    console.error("Database error:", err);
-    res.status(500).send("Server error: " + err.message);
-  } finally {
-    if (conn) conn.release();
-  }
-});
+// app.post("/addUser", async (req, res) => {
+//   console.log("Adding user");
+//   const { name } = req.body;
+//   let conn;
+//   try {
+//     conn = await pool.getConnection();
+//     await conn.query("INSERT INTO user (name) VALUES (?)", [name]);
+//     res.status(200).send("User added successfully");
+//   } catch (err) {
+//     console.error("Database error:", err);
+//     res.status(500).send("Server error: " + err.message);
+//   } finally {
+//     if (conn) conn.release();
+//   }
+// });
 
 app.post("/login", async (req, res) => {
   console.log("login");
@@ -143,7 +144,7 @@ app.get("/user/:id", (req, res) => {
           connection.release();
           if (rows.length > 0) {
             const user = rows[0];
-            res.json({ success: true, user });
+            res.json(JSON.parse(stringifyBigInt({ success: true, user })));
           } else {
             res.json({ success: false });
           }
@@ -172,7 +173,7 @@ app.post("/updateSteps", (req, res) => {
       ); // Setzen Sie steps auf 0, wenn es NULL ist, bevor Sie die neuen Schritte hinzufügen
     })
     .then((result) => {
-      res.json({ success: true });
+      res.json(JSON.parse(stringifyBigInt({ success: true, result })));
       if (connection) connection.release(); // Geben Sie die Verbindung zurück an den Pool
     })
     .catch((err) => {
@@ -198,7 +199,7 @@ app.post("/updateStepsAfterMaps", (req, res) => {
       ); // Setzen Sie steps auf den neuen Wert
     })
     .then((result) => {
-      res.json({ success: true });
+      res.json(JSON.parse(stringifyBigInt({ success: true, result })));
       if (connection) connection.release(); // Geben Sie die Verbindung zurück an den Pool
     })
     .catch((err) => {
@@ -253,7 +254,7 @@ app.post("/updateStepsLastDay", (req, res) => {
       ); // Setzen Sie stepsLastDay auf 0, wenn es NULL ist, bevor Sie die neuen Schritte hinzufügen
     })
     .then((result) => {
-      res.json({ success: true });
+      res.json(JSON.parse(stringifyBigInt({ success: true })));
       if (connection) connection.release(); // Geben Sie die Verbindung zurück an den Pool
     })
     .catch((err) => {
@@ -279,7 +280,9 @@ app.get("/getUserLevel", (req, res) => {
     })
     .then((result) => {
       if (result.length > 0) {
-        res.json({ success: true, level: result[0].level });
+        res.json(
+          JSON.parse(stringifyBigInt({ success: true, level: result[0].level }))
+        );
       } else {
         res.json({ success: false, message: "User not found" });
       }
@@ -309,7 +312,9 @@ app.get("/getUserSteps", (req, res) => {
     })
     .then((result) => {
       if (result.length > 0) {
-        res.json({ success: true, steps: result[0].steps });
+        res.json(
+          JSON.parse(stringifyBigInt({ success: true, steps: result[0].steps }))
+        );
       } else {
         res.json({ success: false, message: "User not found" });
       }
@@ -320,6 +325,8 @@ app.get("/getUserSteps", (req, res) => {
       if (connection) connection.release();
     });
 });
+
+//hier
 
 app.get("/getUserDmgPoints", (req, res) => {
   const { id } = req.query;
@@ -338,7 +345,11 @@ app.get("/getUserDmgPoints", (req, res) => {
     })
     .then((result) => {
       if (result.length > 0) {
-        res.json({ success: true, dmgPoints: result[0].dmgPoints });
+        res.json(
+          JSON.parse(
+            stringifyBigInt({ success: true, dmgPoints: result[0].dmgPoints })
+          )
+        );
       } else {
         res.json({ success: false, message: "User not found" });
       }
@@ -371,18 +382,8 @@ app.get("/everynameandstepsandlevel", async (req, res) => {
       "SELECT name, COALESCE(steps, 0) as steps, COALESCE(level, 1) as level FROM user"
     );
 
-    // BigInt-Werte in Strings umwandeln
-    const processedResult = result.map((row) => {
-      let newRow = { ...row };
-      for (let key in newRow) {
-        if (typeof newRow[key] === "bigint") {
-          newRow[key] = newRow[key].toString();
-        }
-      }
-      return newRow;
-    });
-
-    res.json(processedResult);
+    // Verwende stringifyBigInt für die Antwortdaten
+    res.send(stringifyBigInt(result));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message });
@@ -398,7 +399,7 @@ app.get("/everynameandstepsandlevelandidandpoisened", async (req, res) => {
     res.send(stringifyBigInt(result));
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message }); // Send the error message in the response
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -481,7 +482,11 @@ app.get("/getDmgPoints", (req, res) => {
       );
     })
     .then((result) => {
-      res.json({ success: true, dmgPoints: result[0].dmgPoints });
+      res.json(
+        JSON.parse(
+          stringifyBigInt({ success: true, dmgPoints: result[0].dmgPoints })
+        )
+      );
       if (connection) connection.release();
     })
     .catch((err) => {
@@ -506,7 +511,14 @@ app.get("/getNumberOfDebuff", (req, res) => {
       );
     })
     .then((result) => {
-      res.json({ success: true, numberOfDebuff: result[0].numberOfDebuff });
+      res.json(
+        JSON.parse(
+          stringifyBigInt({
+            success: true,
+            numberOfDebuff: result[0].numberOfDebuff,
+          })
+        )
+      );
       if (connection) connection.release();
     })
     .catch((err) => {
@@ -539,7 +551,7 @@ app.post("/attackUser", (req, res) => {
       );
     })
     .then((result) => {
-      res.json({ success: true });
+      res.json(JSON.parse(stringifyBigInt({ success: true })));
       if (connection) connection.release();
     })
     .catch((err) => {
@@ -568,7 +580,9 @@ app.get("/getLastClick", (req, res) => {
         if (lastClick === null) {
           lastClick = 0;
         }
-        res.json({ success: true, lastClick: lastClick });
+        res.json(
+          JSON.parse(stringifyBigInt({ success: true, lastClick: lastClick }))
+        );
       } else {
         res.json({ success: false, message: "User not found" });
       }
@@ -596,7 +610,7 @@ app.post("/updateLastClick", (req, res) => {
       );
     })
     .then((result) => {
-      res.json({ success: true });
+      res.json(JSON.parse(stringifyBigInt({ success: true })));
       if (connection) connection.release(); // Release the connection back to the pool
     })
     .catch((err) => {
@@ -625,7 +639,11 @@ app.get("/getLastPotionClick", (req, res) => {
         if (lastPotionClick === null) {
           lastPotionClick = 0;
         }
-        res.json({ success: true, potionClick: lastPotionClick });
+        res.json(
+          JSON.parse(
+            stringifyBigInt({ success: true, potionClick: lastPotionClick })
+          )
+        );
       } else {
         res.json({ success: false, message: "User not found" });
       }
@@ -653,7 +671,7 @@ app.post("/updateLastPotionClick", (req, res) => {
       );
     })
     .then((result) => {
-      res.json({ success: true });
+      res.json(JSON.parse(stringifyBigInt({ success: true })));
       if (connection) connection.release(); // Release the connection back to the pool
     })
     .catch((err) => {
@@ -678,7 +696,7 @@ app.post("/updateStepAfterBuff", (req, res) => {
       ); // Setzen Sie steps auf 0, wenn es NULL ist, bevor Sie die neuen Schritte hinzufügen
     })
     .then((result) => {
-      res.json({ success: true });
+      res.json(JSON.parse(stringifyBigInt({ success: true })));
       if (connection) connection.release(); // Geben Sie die Verbindung zurück an den Pool
     })
     .catch((err) => {
@@ -702,7 +720,7 @@ app.post("/updatePoisendAfterHeal", (req, res) => {
       );
     })
     .then((result) => {
-      res.json({ success: true });
+      res.json(JSON.parse(stringifyBigInt({ success: true })));
       if (connection) connection.release(); // Geben Sie die Verbindung zurück an den Pool
     })
     .catch((err) => {
@@ -727,7 +745,7 @@ app.post("/updateNumberOfDebuff", (req, res) => {
       ); // Setzen Sie numberOfDebuff auf 0, wenn es NULL ist, bevor Sie 1 hinzufügen
     })
     .then((result) => {
-      res.json({ success: true });
+      res.json(JSON.parse(stringifyBigInt({ success: true })));
       if (connection) connection.release(); // Geben Sie die Verbindung zurück an den Pool
     })
     .catch((err) => {
@@ -743,7 +761,9 @@ app.get("/addresses", (req, res) => {
       return connection.query("SELECT id, adr FROM adressen").then((rows) => {
         connection.release();
         if (rows.length > 0) {
-          res.json({ success: true, addresses: rows }); // send all rows
+          res.json(
+            JSON.parse(stringifyBigInt({ success: true, addresses: rows }))
+          ); // send all rows
         } else {
           res.json({ success: false });
         }
@@ -758,8 +778,6 @@ app.get("/addresses", (req, res) => {
 app.post("/updateAddress", (req, res) => {
   const { adr, id } = req.body;
   let connection;
-  // console.log("adr", adr);
-  // console.log("id", id);
 
   pool
     .getConnection()
@@ -773,7 +791,7 @@ app.post("/updateAddress", (req, res) => {
       );
     })
     .then((result) => {
-      res.json({ success: true });
+      res.json(JSON.parse(stringifyBigInt({ success: true })));
       if (connection) connection.release(); // Release the connection back to the pool
     })
     .catch((err) => {
@@ -785,7 +803,6 @@ app.post("/updateAddress", (req, res) => {
 app.post("/reduceNumberOfDebuff", (req, res) => {
   const { userId } = req.body;
   let connection;
-  // console.log("userId", userId);
 
   pool
     .getConnection()
@@ -799,15 +816,27 @@ app.post("/reduceNumberOfDebuff", (req, res) => {
       );
     })
     .then(() => {
-      res.json({
-        success: true,
-        message: "numberOfDebuff updated successfully",
-      });
+      res.json(
+        JSON.parse(
+          stringifyBigInt({
+            success: true,
+            message: "numberOfDebuff updated successfully",
+          })
+        )
+      );
       if (connection) connection.release(); // Release the connection back to the pool
     })
     .catch((err) => {
       console.log(err);
-      res.json({ success: false, message: "An error occurred", error: err });
+      res.json(
+        JSON.parse(
+          stringifyBigInt({
+            success: false,
+            message: "An error occurred",
+            error: err,
+          })
+        )
+      );
       if (connection) connection.release();
     });
 });
@@ -828,22 +857,33 @@ app.post("/raisePoisened", (req, res) => {
       );
     })
     .then(() => {
-      res.json({
-        success: true,
-        message: "Poisened user updated successfully",
-      });
+      res.json(
+        JSON.parse(
+          stringifyBigInt({
+            success: true,
+            message: "Poisened user updated successfully",
+          })
+        )
+      );
       if (connection) connection.release(); // Release the connection back to the pool
     })
     .catch((err) => {
       console.log(err);
-      res.json({ success: false, message: "An error occurred", error: err });
+      res.json(
+        JSON.parse(
+          stringifyBigInt({
+            success: false,
+            message: "An error occurred",
+            error: err,
+          })
+        )
+      );
       if (connection) connection.release();
     });
 });
 
 app.get("/getPoisened", (req, res) => {
   const { userId } = req.query;
-  // console.log(userId);
   let connection;
   pool
     .getConnection()
@@ -859,8 +899,7 @@ app.get("/getPoisened", (req, res) => {
     .then((result) => {
       if (result.length > 0) {
         let user = result[0];
-        // console.log(user.poisened);
-        res.json({ success: true, user: user });
+        res.json(JSON.parse(stringifyBigInt({ success: true, user: user })));
       } else {
         res.json({ success: false, message: "User not found or not poisened" });
       }
@@ -874,8 +913,6 @@ app.get("/getPoisened", (req, res) => {
 
 app.post("/setSinged", (req, res) => {
   const { user2, userId } = req.body;
-  // console.log("user2", user2);
-  // console.log("userId", userId);
   let connection;
 
   pool
@@ -890,15 +927,27 @@ app.post("/setSinged", (req, res) => {
       );
     })
     .then(() => {
-      res.json({
-        success: true,
-        message: "Singed user updated successfully",
-      });
+      res.json(
+        JSON.parse(
+          stringifyBigInt({
+            success: true,
+            message: "Singed user updated successfully",
+          })
+        )
+      );
       if (connection) connection.release(); // Release the connection back to the pool
     })
     .catch((err) => {
       console.log(err);
-      res.json({ success: false, message: "An error occurred", error: err });
+      res.json(
+        JSON.parse(
+          stringifyBigInt({
+            success: false,
+            message: "An error occurred",
+            error: err,
+          })
+        )
+      );
       if (connection) connection.release();
     });
 });
@@ -922,7 +971,9 @@ app.get("/getSinged", (req, res) => {
       if (result.length > 0) {
         let singedId = result[0].singed;
         if (singedId === null || singedId === 1000) {
-          res.json({ success: true, singedName: "" });
+          res.json(
+            JSON.parse(stringifyBigInt({ success: true, singedName: "" }))
+          );
         } else {
           return connection.query(
             `
@@ -938,7 +989,9 @@ app.get("/getSinged", (req, res) => {
     .then((result) => {
       if (result && result.length > 0) {
         let singedName = result[0].name;
-        res.json({ success: true, singedName: singedName });
+        res.json(
+          JSON.parse(stringifyBigInt({ success: true, singedName: singedName }))
+        );
       }
       if (connection) connection.release(); // Release the connection back to the pool
     })
@@ -964,7 +1017,7 @@ app.post("/updateStepAfterPotion", (req, res) => {
       ); // Setzen Sie steps auf 0, wenn es NULL ist, bevor Sie die neuen Schritte hinzufügen
     })
     .then((result) => {
-      res.json({ success: true });
+      res.json(JSON.parse(stringifyBigInt({ success: true })));
       if (connection) connection.release(); // Geben Sie die Verbindung zurück an den Pool
     })
     .catch((err) => {
