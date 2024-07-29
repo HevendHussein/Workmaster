@@ -32,6 +32,13 @@ app.get("/", (req, res) => {
   res.send("Server is running");
 });
 
+// Funktion zur Anpassung von JSON.stringify
+function stringifyBigInt(obj) {
+  return JSON.stringify(obj, (key, value) => {
+    return typeof value === "bigint" ? value.toString() : value;
+  });
+}
+
 app.get("/users", async (req, res) => {
   console.log("Hier");
   let conn;
@@ -387,8 +394,8 @@ app.get("/everynameandstepsandlevelandidandpoisened", async (req, res) => {
     const result = await pool.query(
       "SELECT id, name, COALESCE(steps, 0) as steps, COALESCE(level, 1) as level, poisened FROM user"
     );
-    //console.log(result.rows); // Log only the data
-    res.json(result);
+    // Verwende stringifyBigInt für die Antwortdaten
+    res.send(stringifyBigInt(result));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: err.message }); // Send the error message in the response
