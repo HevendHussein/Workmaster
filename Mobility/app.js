@@ -343,16 +343,39 @@ app.get("/getUserDmgPoints", (req, res) => {
     });
 });
 
+//richtig, aber er kann nicht bigINt Werte zurückgeben
+// app.get("/everynameandstepsandlevel", async (req, res) => {
+//   try {
+//     const result = await pool.query(
+//       "SELECT name, COALESCE(steps, 0) as steps, COALESCE(level, 1) as level FROM user"
+//     );
+//     //console.log(result.rows); // Log only the data
+//     res.json(result);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ error: err.message }); // Send the error message in the response
+//   }
+// });
+
 app.get("/everynameandstepsandlevel", async (req, res) => {
   try {
     const result = await pool.query(
       "SELECT name, COALESCE(steps, 0) as steps, COALESCE(level, 1) as level FROM user"
     );
-    //console.log(result.rows); // Log only the data
-    res.json(result);
+
+    // BigInt-Werte in Strings umwandeln
+    const processedResult = result.map((row) => {
+      return {
+        ...row,
+        steps: row.steps ? row.steps.toString() : "0",
+        level: row.level ? row.level.toString() : "1",
+      };
+    });
+
+    res.json(processedResult);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message }); // Send the error message in the response
+    res.status(500).json({ error: err.message });
   }
 });
 
