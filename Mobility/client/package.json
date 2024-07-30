@@ -7,7 +7,8 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@expo/metro-runtime": "~3.2.1",
@@ -18,14 +19,14 @@
     "axios": "^1.6.8",
     "cookie-parser": "^1.4.6",
     "dotenv": "^16.4.5",
-    "expo": "^51.0.11",
+    "expo": "^51.0.23",
     "expo-constants": "~16.0.2",
     "expo-device": "~6.0.2",
     "expo-location": "~17.0.1",
     "expo-modules": "^0.0.0",
-    "expo-notifications": "~0.28.7",
+    "expo-notifications": "^0.28.13",
     "expo-random": "^14.0.1",
-    "expo-sensors": "~13.0.8",
+    "expo-sensors": "~13.0.9",
     "expo-server-sdk": "^3.10.0",
     "expo-status-bar": "~1.12.1",
     "geolib": "^3.3.4",
@@ -38,7 +39,7 @@
     "qs": "^6.12.1",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "react-native": "0.74.2",
+    "react-native": "^0.74.4",
     "react-native-accurate-step-counter": "^2.0.4",
     "react-native-geolocation-service": "^5.3.1",
     "react-native-gesture-handler": "~2.16.1",
@@ -53,7 +54,9 @@
     "react-navigation": "^5.0.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.20.0"
+    "@babel/core": "^7.20.0",
+    "patch-package": "^8.0.0",
+    "postinstall-postinstall": "^2.1.0"
   },
   "private": true
 }

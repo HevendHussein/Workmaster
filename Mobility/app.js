@@ -1004,6 +1004,8 @@ app.get("/getSinged", (req, res) => {
 
 app.post("/updateStepAfterPotion", (req, res) => {
   const { id } = req.body;
+  console.log("Received request to update steps for user ID:", id);
+
   let connection;
 
   pool
@@ -1015,14 +1017,16 @@ app.post("/updateStepAfterPotion", (req, res) => {
         UPDATE user SET steps = COALESCE(steps, 0) + 750 WHERE id = ?
       `,
         [id]
-      ); // Setzen Sie steps auf 0, wenn es NULL ist, bevor Sie die neuen Schritte hinzufügen
+      );
     })
     .then((result) => {
-      res.json(JSON.parse(stringifyBigInt({ success: true })));
-      if (connection) connection.release(); // Geben Sie die Verbindung zurück an den Pool
+      console.log("Update result:", result);
+      res.json({ success: true });
+      if (connection) connection.release();
     })
     .catch((err) => {
-      console.log(err);
+      console.log("Error updating steps:", err);
+      res.status(500).json({ success: false, message: "Server error" });
       if (connection) connection.release();
     });
 });
