@@ -21,7 +21,7 @@ const DailyPotion = ({ userId }) => {
 
   const updateStepsInDb = (id) => {
     axios
-      .post(`${config.ipAddress}/updateStepAfterBuff`, { id })
+      .post(`${config.ipAddress}/updateStepAfterPotion`, { id })
       .then((response) => {
         // Handle response here if needed
       })
