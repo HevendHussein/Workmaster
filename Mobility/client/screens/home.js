@@ -73,9 +73,11 @@ export default function Home({ route, navigation }) {
   //console.log(userId);
 
   const parseBigInt = (key, value) => {
-    return typeof value === "string" && /^[0-9]+$/.test(value)
-      ? BigInt(value)
-      : value;
+    if (typeof value === "string" && /^[0-9]+$/.test(value)) {
+      const num = Number(value);
+      return num > Number.MAX_SAFE_INTEGER ? BigInt(value) : num;
+    }
+    return value;
   };
 
   const parseResponse = (data) => {
