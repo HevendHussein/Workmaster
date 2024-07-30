@@ -1,311 +1,663 @@
-import React, { useState, useEffect } from "react";
-import { Image, View, TouchableOpacity, Text, StyleSheet } from "react-native";
-import MapView, { Marker, Callout, Polyline } from "react-native-maps";
-import * as Location from "expo-location";
+import React, { useState, useEffect, useContext } from "react";
+import { Pedometer } from "expo-sensors";
+import {
+  StyleSheet,
+  Text,
+  View,
+  SafeAreaView,
+  Button,
+  TouchableOpacity,
+  Modal,
+  TouchableWithoutFeedback,
+} from "react-native";
 import axios from "axios";
-import { getDistance } from "geolib"; // Import getDistance function
-import Box from "../images/HealPotion.png";
-import UserIcon from "../images/walking.png";
-import MapViewDirections from "react-native-maps-directions";
-import { useNavigation } from "@react-navigation/native";
-const config = require("./config");
-const GOOGLE_MAPS_APIKEY = "AIzaSyAU0Au_YVLnx6hb5P5Vl9b6wxi29X6K284";
+import Icon from "react-native-vector-icons/FontAwesome";
+import * as Progress from "react-native-progress";
+import MaterialIcon from "react-native-vector-icons/MaterialCommunityIcons";
+import Time from "./time";
+import { Alert, Image } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
+import LottieView from "lottie-react-native";
+import Treasur from "../lottify/treasur";
+import Avatar from "./avatar";
+import InventoryModal from "./inventorymodal";
+import RewardModal from "./rewardmodal";
+import DailyPotion from "./dailypotion";
+import HealMap from "./healMap";
+import HealMapImage from "../images/MapForHeal.jpg";
+import Grind from "../images/grind.png";
+import PoisonSpit from "../images/poisonspit.png";
+const CALORIES_PER_STEP = 0.05;
 
 /*
-TODO: Kann sein, dass die Adressen nicht richtig geändert werden
-TODO: Muss sowieso in Datenbank geupdatet werden, hierfür muss die ID der Adresse bekannt sein
-TODO: ID des Users in Coponent healMap übergeben
+TODO: Überprüfe, ob bei Lvl 12 es auch die richtige Belohnung gibt, diese nur
+einmal angezeigt wird und nicht das ganze Level
+TODO: Wenn es eine Belohnung gibt, dann wird diese angezeigt über Bildschirm,
+diese wird hierzu schwarz
+TODO: Inventar wird hinzugefügt
+
 */
 
-const HealMap = ({ route, navigate }) => {
-  const [addresses, setAddresses] = useState([]);
-  const [coordinates, setCoordinates] = useState([]);
-  const [location, setLocation] = useState(null);
-  const [selectedCoordinate, setSelectedCoordinate] = useState(null);
-  const [distance, setDistance] = useState(null);
-  const [duration, setDuration] = useState(null);
-  const { userId } = route.params;
-  const [poisenedUser, setPoisenedUser] = useState(null);
-  const [hasReachedDestination, setHasReachedDestination] = useState(false);
-  const navigation = useNavigation();
+export default function Home({ route, navigation }) {
+  const [steps, setSteps] = useState(0);
+  const [isTracking, setIsTracking] = useState(false);
+  const config = require("./config"); // Import your config file
+  const { userId } = route.params; // Abrufen der userId aus den Routenparametern
+  const [username, setUsername] = useState("");
+  const [level, setLevel] = useState(1); // Definieren Sie die level Zustandsvariable mit einem Anfangswert von 1
+  const [stepsDB, setStepsDB] = useState(0);
+  const [nextLevelSteps, setNextLevelSteps] = useState(0); // Definieren Sie die nextLevelSteps Zustandsvariable mit einem Anfangswert von 1000
+  const [stepsInThisLevel, setStepsInThisLevel] = useState(0); // Definieren Sie die stepsInThisLevel Zustandsvariable mit einem Anfangswert von 0
+  const [levelUp, setLevelUp] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [lastClickDB, setLastClickDB] = useState(0);
+  const [singedDB, setSingedDB] = useState("");
+  const [modalVisible, setModalVisible] = useState(false);
+  const rewards = {
+    5: "Ein Dolch",
+    10: "Ein Lederwams",
+    12: "Lederschuhe",
+    15: "Ein Kettenhemd",
+    20: "Ein Langschwert",
+    25: "Eine vollständige Rüstung",
+    30: "Verzierte Rüstung",
+    35: "Magische Rüstung mit Glüheffekten",
+    40: "Legendäre Stiefel mit Runen",
+    45: "Ein legendäres Schwert mit Runen",
+    50: "Ein Meisterschwert mit komplexen Verzierungen",
+    55: "Mythische Rüstung mit leuchtenden Symbolen",
+    60: "Epische Stiefel, die von Licht umgeben sind",
+    65: "Ein episches Schwert, das von Licht umgeben ist",
+  };
+  //in userId ist die ID des Benutzers gespeichert
+  //console.log(userId);
 
   useEffect(() => {
-    let watcher = null;
-
-    async function watchPosition() {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        console.warn("Permission to access location was denied");
-        return;
-      }
-
-      watcher = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.BestForNavigation,
-          timeInterval: 1000,
-          distanceInterval: 1,
-        },
-        (location) => {
-          setLocation(location);
+    const fetchUser = async () => {
+      try {
+        const response = await axios.get(`${config.ipAddress}/user/${userId}`);
+        if (response.data.success) {
+          setUsername(response.data.user.name);
         }
-      );
-    }
-
-    watchPosition();
-
-    return () => {
-      if (watcher) {
-        watcher.remove();
+      } catch (error) {
+        console.error(error);
       }
     };
-  }, []);
 
-  const generateRandomCoordinates = () => {
-    const minLatitude = 52.3341;
-    const maxLatitude = 52.4206;
-    const minLongitude = 9.664;
-    const maxLongitude = 9.8471;
-
-    const latitude = Math.random() * (maxLatitude - minLatitude) + minLatitude;
-    const longitude =
-      Math.random() * (maxLongitude - minLongitude) + minLongitude;
-
-    return { latitude, longitude };
-  };
-
-  // Create an async function to handle the await keyword
-  const updateAddress = async (index) => {
-    // Generate a new random address
-    const newCoords = generateRandomCoordinates();
-    const newAddressResult = await Location.reverseGeocodeAsync(newCoords);
-    const newAddress = `${newAddressResult[0].street} ${newAddressResult[0].houseNumber}, ${newAddressResult[0].postalCode}, ${newAddressResult[0].city}, ${newAddressResult[0].region}, ${newAddressResult[0].country}`;
-    // Update the address in the state
-    setAddresses((prevAddresses) => {
-      const updatedAddresses = [...prevAddresses];
-      updatedAddresses[index].adr = newAddress;
-      return updatedAddresses;
-    });
-
-    console.log("addresses[index].id", addresses[index].id);
-
-    axios
-      .post(`${config.ipAddress}/updateAddress`, {
-        adr: newAddress,
-        id: addresses[index].id,
-      })
-      .then((response) => {
-        if (response.data.success) {
-          console.log("Successfully updated address in the database");
-        } else {
-          console.warn(
-            "Failed to update address in the database:",
-            response.data.message
-          );
-        }
-      })
-      .catch((error) => {
-        console.warn("Failed to update address in the database:", error);
-      });
-  };
+    fetchUser();
+  }, [userId]);
 
   useEffect(() => {
-    if (location && coordinates.length > 0) {
-      coordinates.forEach((coordinate, index) => {
-        const distance = getDistance(
-          {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-          },
-          { latitude: coordinate.latitude, longitude: coordinate.longitude }
-        );
-        // console.log(`Distance to coordinate ${index}: ${distance} meters`);
-        if (distance <= 50) {
-          if (poisenedUser === 1) {
-            console.log("User is poisened, can't heal");
+    let subscription;
+
+    const checkAndRequestPedometerPermission = async () => {
+      const { granted } = await Pedometer.getPermissionsAsync();
+      if (!granted) {
+        const { status } = await Pedometer.requestPermissionsAsync();
+        if (status !== "granted") {
+          alert("Permission to access pedometer was denied");
+          return;
+        }
+      }
+
+      if (isTracking) {
+        Pedometer.isAvailableAsync().then((result) => {
+          if (result) {
+            subscription = Pedometer.watchStepCount((data) => {
+              setSteps(data.steps);
+            });
+          } else {
+            console.log("Pedometer is not available");
           }
-          console.log(
-            `User is within 50 meters of address with ID: ${addresses[index].id}`
-          );
-          (async () => {
-            await updateAddress(index);
-          })();
-
-          // Navigate back to Home
-          //   navigation.navigate("Home");
-        }
-      });
-    }
-  }, [location, coordinates, addresses]);
-
-  useEffect(() => {
-    axios
-      .get(`${config.ipAddress}/addresses`)
-      .then((response) => {
-        if (response.data.success) {
-          //   console.log("Successfully fetched addresses");
-          //   console.log(response.data.addresses); // Log addresses to console
-          setAddresses(
-            response.data.addresses.map((address) => ({
-              ...address,
-              place: address.place === null ? 0 : address.place,
-            }))
-          );
-        } else {
-          console.warn("Failed to fetch addresses:", response.data.message);
-        }
-      })
-      .catch((error) => {
-        console.warn("Failed to fetch addresses:", error);
-      });
-  }, []);
-
-  async function getCoordinates(addresses) {
-    const coordinates = await Promise.all(
-      addresses.map(async (address) => {
-        const result = await Location.geocodeAsync(address.adr);
-        if (result.length > 0) {
-          return {
-            latitude: result[0].latitude,
-            longitude: result[0].longitude,
-          };
-        } else {
-          console.warn(`Failed to geocode address: ${address.adr}`);
-          return null;
-        }
-      })
-    );
-
-    return coordinates.filter(Boolean); // Remove null values
-  }
-
-  useEffect(() => {
-    if (addresses.length > 0) {
-      getCoordinates(addresses)
-        .then((coordinates) => {
-          //   console.log("Coordinates:", coordinates);
-          setCoordinates(coordinates);
-        })
-        .catch((error) => {
-          console.warn("Failed to get coordinates:", error);
         });
-    }
-  }, [addresses]);
+      }
+    };
 
-  const fetchPoisenedUser = (userId) => {
+    checkAndRequestPedometerPermission();
+
+    return () => {
+      if (subscription) {
+        subscription.remove();
+      }
+    };
+  }, [isTracking]);
+
+  const updateStepsInDb = (newSteps, id) => {
+    // Use axios to send the steps and the id to your database
     axios
-      .get(`${config.ipAddress}/getPoisened`, { params: { userId: userId } })
+      .post(`${config.ipAddress}/updateSteps`, { steps: newSteps, id })
+      .then((response) => {
+        //console.log(response.data);
+        //console.log(newSteps.cookies);
+      })
+      .catch((error) => {
+        console.warn("Failed to update steps in database:", error);
+      });
+  };
+
+  const updateStepsLastDayInDb = (newSteps, id) => {
+    // Use axios to send the steps and the id to your database
+    axios
+      .post(`${config.ipAddress}/updateStepsLastDay`, { steps: newSteps, id })
+      .then((response) => {
+        //console.log(response.data);
+      })
+      .catch((error) => {
+        console.warn("Failed to update steps in database:", error);
+      });
+  };
+
+  const toggleTracking = () => {
+    if (isTracking) {
+      updateStepsInDb(steps, userId);
+      updateStepsLastDayInDb(steps, userId);
+      setSteps(0);
+    }
+    setIsTracking(!isTracking);
+  };
+
+  //lvl aus der Datenbank holen
+  const fetchUserLevel = (id) => {
+    axios
+      .get(`${config.ipAddress}/getUserLevel`, { params: { id } })
       .then((response) => {
         if (response.data.success) {
-          // Set poisenedUser to the poisened value, not the entire user object
-          setPoisenedUser(response.data.user.poisened);
-        } else {
-          console.log("Failed to fetch poisened user");
+          setLevel(response.data.level); // Aktualisieren Sie den Wert der level Zustandsvariable
         }
       })
       .catch((error) => {
-        console.warn("Failed to fetch poisened user:", error);
+        console.warn("Failed to fetch user level:", error);
+      });
+  };
+  //rufe fetchUserLevel auf, wenn sich die userId ändert
+  useEffect(() => {
+    fetchUserLevel(userId);
+  }, [userId]);
+
+  const fetchUserSteps = (id) => {
+    axios
+      .get(`${config.ipAddress}/getUserSteps`, { params: { id } })
+      .then((response) => {
+        if (response.data.success) {
+          setStepsDB(response.data.steps); // Aktualisieren Sie den Wert der stepsDB Zustandsvariable
+        }
+      })
+      .catch((error) => {
+        console.warn("Failed to fetch user steps:", error);
+      });
+  };
+
+  // Rufe fetchUserSteps auf, wenn sich die userId ändert
+  useEffect(() => {
+    fetchUserSteps(userId);
+  }, [userId, isTracking]);
+
+  useEffect(() => {
+    fetchUserSteps(userId);
+  });
+
+  // Funktion zur Berechnung der Gesamtzahl der Schritte, die benötigt werden, um das nächste Level zu erreichen
+  const calculateNextLevelSteps = (currentLevel) => {
+    let totalSteps = 1000;
+    for (let i = 2; i <= currentLevel; i++) {
+      totalSteps += 1000 + 250 * (i - 1);
+    }
+    return totalSteps;
+  };
+
+  // Funktion zur Berechnung des aktuellen Levels basierend auf der Gesamtzahl der Schritte
+  const calculateCurrentLevel = (totalSteps) => {
+    let level = 1;
+    let nextLevelSteps = 1000;
+
+    while (totalSteps >= nextLevelSteps) {
+      level++;
+      nextLevelSteps = calculateNextLevelSteps(level);
+    }
+
+    return level;
+  };
+
+  // Funktion zum Aktualisieren des Levels in der Datenbank
+  const updateLevelInDb = (newLevel, id) => {
+    // Verwenden Sie axios, um das Level und die ID an Ihre Datenbank zu senden
+    axios
+      .post(`${config.ipAddress}/updateLevel`, { level: newLevel, id })
+      .then((response) => {
+        //console.log(response.data);
+      })
+      .catch((error) => {
+        console.warn("Failed to update level in database:", error);
+      });
+  };
+
+  const getStepsFromDb = (id) => {
+    return axios
+      .get(`${config.ipAddress}/getUserSteps`, { params: { id } })
+      .then((response) => {
+        if (response.data.success) {
+          return response.data.steps;
+        } else {
+          throw new Error("Failed to fetch user steps");
+        }
+      });
+  };
+
+  // Überprüfen Sie, ob der Benutzer das nächste Level erreicht hat, wenn sich stepsDB oder steps ändern
+  useEffect(() => {
+    const totalSteps = stepsDB + steps;
+    const currentLevel = calculateCurrentLevel(totalSteps);
+
+    if (currentLevel !== level) {
+      setLevel(currentLevel);
+      updateLevelInDb(currentLevel, userId); // Aktualisieren Sie das Level in der Datenbank
+    }
+  }, [stepsDB, steps, level, userId]);
+
+  // Funktion zur Berechnung der Schritte, die in diesem Level gemacht wurden
+  const calculateCurrentLevelSteps = (totalSteps, currentLevel) => {
+    let previousLevelSteps = 0;
+    for (let i = 1; i < currentLevel; i++) {
+      previousLevelSteps += 1000 + 250 * (i - 1);
+    }
+    return totalSteps - previousLevelSteps;
+  };
+
+  // Funktion zur Berechnung der Schritte, die für dieses Level benötigt werden
+  const calculateLevelSteps = (currentLevel) => {
+    return 1000 + 250 * (currentLevel - 1);
+  };
+
+  // Funktion zur Berechnung des Fortschritts zum nächsten Level
+  const calculateProgress = (totalSteps, currentLevel) => {
+    const currentLevelSteps = calculateCurrentLevelSteps(
+      totalSteps,
+      currentLevel
+    );
+    const levelSteps = calculateLevelSteps(currentLevel);
+    if (currentLevelSteps === levelSteps && !levelUp) {
+      setLevelUp(true);
+    }
+    return currentLevelSteps / levelSteps;
+  };
+
+  useEffect(() => {
+    getStepsFromDb(userId)
+      .then((newSteps) => {
+        setStepsDB(newSteps);
+      })
+      .catch((error) => {
+        console.warn("Failed to get steps from database:", error);
+      });
+  }, [userId, stepsDB]); // Dependency array includes both userId and stepsDB
+
+  useEffect(() => {
+    const reward = rewards[level];
+    if (reward && levelUp) {
+      console.log("Level Up! Reward the user. in UseEffect");
+      console.log(`The user has earned: ${reward}`);
+      //erhohe steps und stepsDB um 1
+      setSteps(steps + 1);
+      setStepsDB(stepsDB + 1);
+      setShowModal(true); // Modal öffnen, wenn der Benutzer eine Belohnung erhält
+    }
+    setLevelUp(false);
+  }, [level]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const onBackPress = () => {
+        Alert.alert("Logout", "Are you sure you want to logout?", [
+          {
+            text: "Cancel",
+            onPress: () => navigation.navigate("Home", { userId: userId }),
+            style: "cancel",
+          },
+          { text: "YES", onPress: () => navigation.navigate("LoginScreen") },
+        ]);
+        return true;
+      };
+
+      navigation.addListener("beforeRemove", onBackPress);
+
+      return () => navigation.removeListener("beforeRemove", onBackPress);
+    }, [navigation])
+  );
+
+  const fetchLastClick = (id) => {
+    axios
+      .get(`${config.ipAddress}/getLastClick`, { params: { id } })
+      .then((response) => {
+        if (response.data.success) {
+          setLastClickDB(response.data.lastClick); // Update the value of the lastClickDB state variable
+        }
+      })
+      .catch((error) => {
+        console.warn("Failed to fetch last click:", error);
+      });
+  };
+
+  // Call fetchLastClick when the userId changes
+  useEffect(() => {
+    fetchLastClick(userId);
+  }, [userId, lastClickDB]);
+
+  const updateLastClickInDb = (id) => {
+    axios
+      .post(`${config.ipAddress}/updateLastClick`, { id, lastClick: 1 })
+      .then((response) => {
+        if (response.data.success) {
+          console.log("Successfully updated last click");
+        } else {
+          console.warn("Failed to update last click:", response.data.message);
+        }
+      })
+      .catch((error) => {
+        console.warn("Failed to update last click:", error);
+      });
+  };
+
+  const fetchSinged = (id) => {
+    axios
+      .get(`${config.ipAddress}/getSinged`, { params: { id } })
+      .then((response) => {
+        if (response.data.success) {
+          const singedName = response.data.singedName;
+          setSingedDB(singedName); // Update the value of the singedDB state variable
+        } else {
+          setSingedDB("");
+          // console.warn("Failed to fetch singed data:", response.data.message);
+        }
+      })
+      .catch((error) => {
+        console.warn("Failed to fetch singed data:", error);
       });
   };
 
   useEffect(() => {
-    fetchPoisenedUser(userId);
-  }, []);
+    fetchSinged(userId);
+  });
 
   return (
-    <View style={{ flex: 1 }}>
-      <MapView
-        style={{ flex: 1 }}
-        initialRegion={{
-          latitude: location ? location.coords.latitude : 52.3759,
-          longitude: location ? location.coords.longitude : 9.732,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
+    <SafeAreaView style={styles.containers}>
+      <RewardModal
+        showModal={showModal}
+        level={level}
+        onClose={() => setShowModal(false)}
+      />
+      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+        <View style={{ ...styles.lead, marginLeft: 10 }}>
+          <TouchableOpacity
+            onPress={() =>
+              navigation.navigate("Attack", {
+                userId,
+                checkAndRequestPedometerPermission:
+                  this.checkAndRequestPedometerPermission,
+              })
+            }
+          >
+            <Text style={{ fontWeight: "bold", fontSize: 20 }}>
+              Attack <MaterialIcon name="sword" size={20} color="#000" />
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.lead}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("LeaderBoard", { userId })}
+          >
+            <Text style={{ fontWeight: "bold", fontSize: 20 }}>
+              Leaderboard {"\u2192"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.name}>
+        <Text style={styles.title}>Name: {username}</Text>
+        <Text style={styles.title}>LvL: {level}</Text>
+      </View>
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          marginLeft: 5,
+          marginRight: 5,
         }}
       >
-        {coordinates.map((coordinate, index) => (
-          <Marker
-            key={index}
-            coordinate={coordinate}
-            onPress={() => setSelectedCoordinate(coordinate)}
-          >
-            <Image source={Box} style={{ height: 30, width: 30 }} />
-            <Callout style={{ width: 150, height: 50 }}>
-              <Text style={{ fontSize: 16 }}>
-                {addresses[index].adr.split(",")[0]}
-                {addresses[index].adr.split(",")[1]
-                  ? addresses[index].adr.split(",")[1]
-                  : ""}
-              </Text>
-            </Callout>
-          </Marker>
-        ))}
-        {location && selectedCoordinate && !hasReachedDestination && (
-          <MapViewDirections
-            origin={{
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-            }}
-            destination={selectedCoordinate}
-            apikey={GOOGLE_MAPS_APIKEY} // replace with your Google Maps API key
-            strokeWidth={3}
-            strokeColor="hotpink"
-            mode="WALKING"
-            onError={(errorMessage) => {
-              console.log("GMAPS error:", errorMessage);
-            }}
-            onReady={(result) => {
-              setDistance(result.distance);
-              setDuration(result.duration);
-            }}
-          />
-        )}
-        {location && (
-          <Marker
-            key="userLocation"
-            coordinate={{
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
+        <TouchableOpacity
+          onPress={() => navigation.navigate("HealMap", { userId })}
+        >
+          <Image source={HealMapImage} style={{ width: 50, height: 50 }} />
+        </TouchableOpacity>
+
+        <View style={{ flex: 3 }}>
+          <TouchableOpacity onPress={() => setModalVisible(true)}>
+            {singedDB !== "" ? (
+              <Image source={PoisonSpit} style={{ width: 35, height: 35 }} />
+            ) : (
+              <Image source={Grind} style={{ width: 35, height: 35 }} />
+            )}
+          </TouchableOpacity>
+
+          <Modal
+            animationType="slide"
+            transparent={true}
+            visible={modalVisible}
+            onRequestClose={() => {
+              setModalVisible(!modalVisible);
             }}
           >
-            <Image source={UserIcon} style={{ height: 30, width: 30 }} />
-          </Marker>
-        )}
-      </MapView>
-      {distance && duration && (
-        <View style={styles.DistAndDuration}>
-          <Text
-            style={{
-              alignItems: "center",
-              alignSelf: "center",
-            }}
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                justifyContent: "center",
+                alignItems: "center",
+                backgroundColor: "rgba(0, 0, 0, 0.5)",
+              }}
+              activeOpacity={1}
+              onPressOut={() => setModalVisible(false)}
+            >
+              <TouchableWithoutFeedback>
+                <View
+                  style={{
+                    backgroundColor: "white",
+                    padding: 20,
+                    width: "80%",
+                    borderRadius: 10, // Runde Ecken hinzufügen
+                    shadowColor: "#000", // Schatten hinzufügen
+                    shadowOffset: {
+                      width: 0,
+                      height: 2,
+                    },
+                    shadowOpacity: 0.25,
+                    shadowRadius: 3.84,
+                    elevation: 5,
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={() => setModalVisible(false)}
+                    style={{ alignSelf: "flex-end" }}
+                  >
+                    <Icon name="close" size={24} color="black" />
+                  </TouchableOpacity>
+                  <Text>
+                    {singedDB !== "" ? (
+                      <>
+                        <Text style={{ fontWeight: "bold", fontSize: 20 }}>
+                          {singedDB}
+                        </Text>
+                        <Text>
+                          {" "}
+                          hat dich vergiftet! Finde einen Heiltrank, ansonsten
+                          werden deine Steps reduziert!
+                        </Text>
+                      </>
+                    ) : (
+                      "Sammle EX-Booster und werde stärker."
+                    )}
+                  </Text>
+                </View>
+              </TouchableWithoutFeedback>
+            </TouchableOpacity>
+          </Modal>
+        </View>
+
+        <InventoryModal level={level} />
+      </View>
+
+      <View>
+        <Avatar level={level} />
+      </View>
+      <View style={styles.infoContainer}>
+        <View style={styles.stepsContainer}>
+          <Text style={styles.stepsText}>{steps}</Text>
+          <Text style={styles.stepsLabel}>Steps</Text>
+        </View>
+      </View>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Text
+          style={{
+            marginRight: 10,
+            fontSize: 25,
+            fontWeight: "bold",
+            color: "#3498db",
+          }}
+        >
+          Drücke{" "}
+        </Text>
+        <View style={styles.TrackingButtonPos}>
+          <TouchableOpacity
+            style={styles.TrackingButton}
+            onPress={toggleTracking}
           >
-            Distance: {distance.toFixed(2)} km Duration: {Math.ceil(duration)}{" "}
-            min
+            {isTracking ? (
+              <Icon name="pause" size={30} color="#fff" />
+            ) : (
+              <Icon name="play" size={30} color="#fff" />
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.progressBar}>
+        <Progress.Bar
+          progress={calculateProgress(stepsDB + steps, level)}
+          width={200}
+        />
+        <View>
+          <Text>
+            {calculateCurrentLevelSteps(stepsDB + steps, level)}/
+            {calculateLevelSteps(level)}
           </Text>
         </View>
-      )}
-    </View>
+      </View>
+
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <View style={styles.lead}>
+          <TouchableOpacity
+            onPress={() => {
+              fetchLastClick(userId);
+              if (lastClickDB !== 1) {
+                updateLastClickInDb(userId);
+                setLastClickDB(1);
+                navigation.navigate("DailyMission", { userId });
+              }
+            }}
+          >
+            <Text
+              style={{
+                fontWeight: "bold",
+                fontSize: lastClickDB !== 1 ? 25 : 20,
+                color: lastClickDB !== 1 ? "red" : "black",
+                textDecorationLine: lastClickDB === 1 ? "line-through" : "none",
+              }}
+            >
+              DailyMission
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <DailyPotion userId={userId} />
+      </View>
+    </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  DistAndDuration: {
-    position: "absolute",
-    bottom: 10,
-    left: 10,
-    backgroundColor: "green",
-    width: "50%", // Set the width
-    height: "10%", // Set the height
-    marginTop: 20,
-    backgroundColor: "white",
-    shadowColor: "black",
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.5,
-    shadowRadius: 4,
-    elevation: 4,
-    padding: 8,
-    borderRadius: 8,
+  containers: {
+    flex: 1,
+    marginTop: 24,
+  },
+  lead: {
+    alignItems: "flex-end",
+    marginRight: 10,
+    marginTop: 10,
+  },
+  name: {
+    alignItems: "center",
+    marginVertical: 10,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#333",
+  },
+  TrackingButtonPos: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  TrackingButton: {
+    backgroundColor: "#2c3e50",
+    marginVertical: 10,
+    padding: 15,
+    alignItems: "center",
+    width: "auto",
+    borderRadius: 20,
+  },
+  buttonText: {
+    color: "white",
+    fontSize: 16,
+  },
+  infoContainer: {
+    alignItems: "center",
+    // backgroundColor: "green",
+  },
+  stepsContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    // backgroundColor: "blue",
+  },
+  stepsText: {
+    fontSize: 33,
+    fontWeight: "bold",
+    marginRight: 8,
+    color: "#3498db",
+  },
+  stepsLabel: {
+    fontSize: 16,
+    color: "#555",
+  },
+  caloriesText: {
+    fontSize: 16,
+    color: "#e74c3c",
+    fontWeight: "bold",
+  },
+  progressBar: {
+    margin: 10,
+    alignItems: "center",
   },
 });
-
-export default HealMap;

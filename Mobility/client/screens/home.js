@@ -72,6 +72,16 @@ export default function Home({ route, navigation }) {
   //in userId ist die ID des Benutzers gespeichert
   //console.log(userId);
 
+  const parseBigInt = (key, value) => {
+    return typeof value === "string" && /^[0-9]+$/.test(value)
+      ? BigInt(value)
+      : value;
+  };
+
+  const parseResponse = (data) => {
+    return JSON.parse(data, parseBigInt);
+  };
+
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -123,12 +133,12 @@ export default function Home({ route, navigation }) {
   }, [isTracking]);
 
   const updateStepsInDb = (newSteps, id) => {
-    // Use axios to send the steps and the id to your database
     axios
       .post(`${config.ipAddress}/updateSteps`, { steps: newSteps, id })
       .then((response) => {
-        //console.log(response.data);
-        //console.log(newSteps.cookies);
+        const parsedResponse = parseResponse(JSON.stringify(response.data));
+        // Handle parsed response if needed
+        console.log(parsedResponse);
       })
       .catch((error) => {
         console.warn("Failed to update steps in database:", error);
@@ -178,8 +188,9 @@ export default function Home({ route, navigation }) {
     axios
       .get(`${config.ipAddress}/getUserSteps`, { params: { id } })
       .then((response) => {
-        if (response.data.success) {
-          setStepsDB(response.data.steps); // Aktualisieren Sie den Wert der stepsDB Zustandsvariable
+        const parsedResponse = parseResponse(JSON.stringify(response.data));
+        if (parsedResponse.success) {
+          setStepsDB(parsedResponse.steps); // Aktualisieren Sie den Wert der stepsDB Zustandsvariable
         }
       })
       .catch((error) => {
@@ -235,11 +246,16 @@ export default function Home({ route, navigation }) {
     return axios
       .get(`${config.ipAddress}/getUserSteps`, { params: { id } })
       .then((response) => {
-        if (response.data.success) {
-          return response.data.steps;
+        const parsedResponse = parseResponse(JSON.stringify(response.data));
+        if (parsedResponse.success) {
+          return parsedResponse.steps;
         } else {
           throw new Error("Failed to fetch user steps");
         }
+      })
+      .catch((error) => {
+        console.warn("Failed to fetch user steps:", error);
+        throw error;
       });
   };
 

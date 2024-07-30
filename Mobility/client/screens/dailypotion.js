@@ -19,32 +19,11 @@ const DailyPotion = ({ userId }) => {
   const [potionImage, setPotionImage] = useState(null);
   const [lastPotionDB, setLastPotionDB] = useState(0);
 
-  const parseBigInt = (key, value) => {
-    return typeof value === "string" && /^[0-9]+$/.test(value)
-      ? BigInt(value)
-      : value;
-  };
-
-  const parseResponse = (data) => {
-    return JSON.parse(data, parseBigInt);
-  };
-
   const updateStepsInDb = (id) => {
     axios
       .post(`${config.ipAddress}/updateStepAfterPotion`, { id })
       .then((response) => {
-        // Verwende die parseResponse-Funktion, um die Antwort zu deserialisieren
-        const parsedResponse = parseResponse(response.data);
-
-        // Debugging: Überprüfen der deserialisierten Antwort
-        console.log("Parsed response:", parsedResponse);
-
-        // Weiteres Handling der Antwort, falls erforderlich
-        if (parsedResponse.success) {
-          console.log("Steps successfully updated");
-        } else {
-          console.warn("Failed to update steps:", parsedResponse.message);
-        }
+        // Handle response here if needed
       })
       .catch((error) => {
         console.warn("Failed to update steps in database:", error);
