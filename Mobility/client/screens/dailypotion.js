@@ -61,7 +61,7 @@ const DailyPotion = ({ userId }) => {
     if (lastPotionDB !== 1) {
       //   console.log("hier if", lastPotionDB);
       const random = Math.random();
-      const selectedPotion = random < 0.9 ? BuffPotion : DebuffPotion;
+      const selectedPotion = random < 0.2 ? BuffPotion : DebuffPotion;
       setPotionImage(selectedPotion);
       setModalVisible(true);
       if (selectedPotion === DebuffPotion) {

@@ -186,7 +186,7 @@ app.post("/updateSteps", (req, res) => {
 app.post("/updateStepsAfterMaps", (req, res) => {
   const { steps, id } = req.body;
   let connection;
-  console.log("steps", steps);
+  console.log("Hat DailyMission erledigt: ", id);
 
   pool
     .getConnection()
@@ -296,7 +296,7 @@ app.get("/getUserLevel", (req, res) => {
 });
 
 app.get("/getUserSteps", (req, res) => {
-  console.log(1, "Endpunkt getUserSteps");
+  // console.log(1, "Endpunkt getUserSteps");
   const { id } = req.query;
   let connection;
 
@@ -1004,7 +1004,6 @@ app.get("/getSinged", (req, res) => {
 
 app.post("/updateStepAfterPotion", (req, res) => {
   const { id } = req.body;
-  console.log("Received request to update steps for user ID:", id);
 
   let connection;
 
