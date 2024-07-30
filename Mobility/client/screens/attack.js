@@ -31,12 +31,25 @@ export default function Attack({ route, navigation }) {
   const [dmgPoints, setDmgPoints] = useState(0);
   const [numberOfDebuff, setNumberOfDebuff] = useState(0);
 
+  const parseBigInt = (key, value) => {
+    if (typeof value === "string" && /^[0-9]+$/.test(value)) {
+      const num = Number(value);
+      return num > Number.MAX_SAFE_INTEGER ? BigInt(value) : num;
+    }
+    return value;
+  };
+
+  const parseResponse = (data) => {
+    return JSON.parse(data, parseBigInt);
+  };
+
   const fetchNumberOfDebuff = (id) => {
     axios
       .get(`${config.ipAddress}/getNumberOfDebuff`, { params: { id } })
       .then((response) => {
-        if (response.data.success) {
-          setNumberOfDebuff(response.data.numberOfDebuff);
+        const parsedResponse = parseResponse(JSON.stringify(response.data));
+        if (parsedResponse.success) {
+          setNumberOfDebuff(parsedResponse.numberOfDebuff);
         }
       })
       .catch((error) => {
@@ -48,8 +61,9 @@ export default function Attack({ route, navigation }) {
     axios
       .get(`${config.ipAddress}/getDmgPoints`, { params: { id } })
       .then((response) => {
-        if (response.data.success) {
-          setDmgPoints(response.data.dmgPoints);
+        const parsedResponse = parseResponse(JSON.stringify(response.data));
+        if (parsedResponse.success) {
+          setDmgPoints(parsedResponse.dmgPoints);
         }
       })
       .catch((error) => {
@@ -66,14 +80,16 @@ export default function Attack({ route, navigation }) {
     axios
       .get(`${config.ipAddress}/getUserLevel`, { params: { id } })
       .then((response) => {
-        if (response.data.success) {
-          setLevel(response.data.level); // Aktualisieren Sie den Wert der level Zustandsvariable
+        const parsedResponse = parseResponse(JSON.stringify(response.data));
+        if (parsedResponse.success) {
+          setLevel(parsedResponse.level); // Aktualisieren Sie den Wert der level Zustandsvariable
         }
       })
       .catch((error) => {
         console.warn("Failed to fetch user level:", error);
       });
   };
+
   //rufe fetchUserLevel auf, wenn sich die userId ändert
   useEffect(() => {
     fetchUserLevel(userId);
@@ -83,8 +99,9 @@ export default function Attack({ route, navigation }) {
     axios
       .get(`${config.ipAddress}/everynameandstepsandlevelandidandpoisened`)
       .then((response) => {
-        if (response) {
-          const sortedUsers = response.data.sort((a, b) => b.steps - a.steps);
+        const parsedResponse = parseResponse(JSON.stringify(response.data));
+        if (parsedResponse) {
+          const sortedUsers = parsedResponse.sort((a, b) => b.steps - a.steps);
           setUsers(sortedUsers);
         } else {
           console.error("Response is undefined");
@@ -103,7 +120,8 @@ export default function Attack({ route, navigation }) {
     axios
       .post(`${config.ipAddress}/attackUser`, { user2, dmgPoints, userId })
       .then((response) => {
-        if (response.data.success) {
+        const parsedResponse = parseResponse(JSON.stringify(response.data));
+        if (parsedResponse.success) {
           setDmgPoints(0);
         }
       })
@@ -127,7 +145,9 @@ export default function Attack({ route, navigation }) {
     axios
       .post(`${config.ipAddress}/reduceNumberOfDebuff`, { userId })
       .then((response) => {
-        if (response.data.success) {
+        const parsedResponse = parseResponse(JSON.stringify(response.data));
+        if (parsedResponse.success) {
+          // console.log("Number of debuff reduced successfully");
         } else {
           console.log("Failed to update numberOfDebuff");
         }
@@ -141,7 +161,8 @@ export default function Attack({ route, navigation }) {
     axios
       .post(`${config.ipAddress}/raisePoisened`, { userId: user2 })
       .then((response) => {
-        if (response.data.success) {
+        const parsedResponse = parseResponse(JSON.stringify(response.data));
+        if (parsedResponse.success) {
           // console.log("Updated poisened user successfully");
         } else {
           console.log("Failed to update poisened user");
@@ -156,7 +177,8 @@ export default function Attack({ route, navigation }) {
     axios
       .post(`${config.ipAddress}/setSinged`, { user2, userId })
       .then((response) => {
-        if (response.data.success) {
+        const parsedResponse = parseResponse(JSON.stringify(response.data));
+        if (parsedResponse.success) {
           // console.log("Updated singed user successfully");
         } else {
           console.log("Failed to update singed user");
